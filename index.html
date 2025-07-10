@@ -18,7 +18,7 @@
         }
 
         .calendar-container {
-            max-width: 700px;
+            max-width: 800px;
             margin: 0 auto;
             background-color: white;
             border-radius: 10px;
@@ -113,6 +113,11 @@
             color: white;
         }
 
+        .date-cell.od {
+            background-color: #9C27B0;
+            color: white;
+        }
+
         .date-cell .status-icon {
             position: absolute;
             bottom: 2px;
@@ -124,7 +129,7 @@
             margin-top: 20px;
             display: flex;
             justify-content: center;
-            gap: 20px;
+            gap: 15px;
             flex-wrap: wrap;
         }
 
@@ -251,6 +256,10 @@
                 <div class="legend-color holiday"></div>
                 <span>Holiday 🎉</span>
             </div>
+            <div class="legend-item">
+                <div class="legend-color od"></div>
+                <span>OD 🏢</span>
+            </div>
         </div>
         <div class="summary">
             <h3>Monthly Summary</h3>
@@ -267,17 +276,22 @@
                     <div class="stat-number" id="holidayCount">0</div>
                     <div class="stat-label">Holidays</div>
                 </div>
+                <div class="stat-item">
+                    <div class="stat-number" id="odCount">0</div>
+                    <div class="stat-label">OD</div>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
         // Status states
-        const STATES = ['none', 'present', 'absent', 'holiday'];
+        const STATES = ['none', 'present', 'absent', 'holiday', 'od'];
         const STATE_ICONS = {
             'present': '✅',
             'absent': '❌',
-            'holiday': '🎉'
+            'holiday': '🎉',
+            'od': '🏢'
         };
 
         // Current viewing month and year
@@ -364,7 +378,7 @@
             const nextState = STATES[nextIndex];
 
             // Remove all state classes
-            cell.classList.remove('present', 'absent', 'holiday');
+            cell.classList.remove('present', 'absent', 'holiday', 'od');
 
             // Remove existing icon
             const existingIcon = cell.querySelector('.status-icon');
@@ -392,6 +406,7 @@
             let presentCount = 0;
             let absentCount = 0;
             let holidayCount = 0;
+            let odCount = 0;
 
             // Count states for current month
             const monthPrefix = `${viewYear}-${viewMonth + 1}-`;
@@ -407,6 +422,9 @@
                         case 'holiday':
                             holidayCount++;
                             break;
+                        case 'od':
+                            odCount++;
+                            break;
                     }
                 }
             }
@@ -415,6 +433,7 @@
             document.getElementById('presentCount').textContent = presentCount;
             document.getElementById('absentCount').textContent = absentCount;
             document.getElementById('holidayCount').textContent = holidayCount;
+            document.getElementById('odCount').textContent = odCount;
         }
 
         function previousMonth() {

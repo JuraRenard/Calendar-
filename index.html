@@ -285,185 +285,136 @@
     </div>
 
     <script>
-        // Status states
-        const STATES = ['none', 'present', 'absent', 'holiday', 'od'];
-        const STATE_ICONS = {
-            'present': '✅',
-            'absent': '❌',
-            'holiday': '🎉',
-            'od': '🏢'
-        };
+/* ----------  CONFIGURATION  ---------- */
+const STATES   = ['none', 'present', 'absent', 'holiday', 'od'];
+const ICONS    = { present: '✅', absent: '❌', holiday: '🎉', od: '🏢' };
+const COOKIE   = 'attendanceCalendar';   // cookie name
+const EXPIRES  = 365;                    // days until cookie expires
 
-        // Current viewing month and year
-        let viewMonth = new Date().getMonth();
-        let viewYear = new Date().getFullYear();
+/* ----------  COOKIE HELPERS  ---------- */
+function setCookie(name, value, days = EXPIRES) {
+    const d = new Date();
+    d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+    document.cookie = `${name}=${encodeURIComponent(JSON.stringify(value))};expires=${d.toUTCString()};path=/`;
+}
 
-        // Store attendance data in memory (no localStorage)
-        let attendanceData = {};
+function getCookie(name) {
+    const c = document.cookie.split('; ').find(row => row.startsWith(`${name}=`));
+    return c ? JSON.parse(decodeURIComponent(c.split('=')[1])) : {};
+}
 
-        function getDaysInMonth(year, month) {
-            return new Date(year, month + 1, 0).getDate();
+/* ----------  STATE  ---------- */
+let viewMonth   = new Date().getMonth();
+let viewYear    = new Date().getFullYear();
+let attendance  = getCookie(COOKIE);    // load from cookie
+
+/* ----------  CALENDAR LOGIC  ---------- */
+const $ = id => document.getElementById(id);
+
+function daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
+function firstDay(y, m)    { return new Date(y, m, 1).getDay(); }
+
+function renderHeader() {
+    const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    $('monthYear').textContent = `${monthNames[viewMonth]} ${viewYear}`;
+}
+
+function createCalendar() {
+    const grid = $('calendarGrid');
+    grid.innerHTML = '';
+
+    // day labels
+    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => {
+        const th = document.createElement('div');
+        th.className = 'day-header';
+        th.textContent = d;
+        grid.appendChild(th);
+    });
+
+    // empty cells
+    const blanks = firstDay(viewYear, viewMonth);
+    for (let i = 0; i < blanks; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'date-cell empty';
+        grid.appendChild(empty);
+    }
+
+    // date cells
+    const totalDays = daysInMonth(viewYear, viewMonth);
+    for (let day = 1; day <= totalDays; day++) {
+        const key = `${viewYear}-${viewMonth + 1}-${day}`;
+        const cell = document.createElement('div');
+        cell.className = 'date-cell';
+        cell.textContent = day;
+
+        const state = attendance[key] || 'none';
+        if (state !== 'none') {
+            cell.classList.add(state);
+            const icon = document.createElement('span');
+            icon.className = 'status-icon';
+            icon.textContent = ICONS[state];
+            cell.appendChild(icon);
         }
 
-        function getFirstDayOfMonth(year, month) {
-            return new Date(year, month, 1).getDay();
-        }
+        cell.addEventListener('click', () => toggleState(key, cell));
+        grid.appendChild(cell);
+    }
+    updateSummary();
+}
 
-        function updateMonthYear() {
-            const monthNames = [
-                'January', 'February', 'March', 'April', 'May', 'June',
-                'July', 'August', 'September', 'October', 'November', 'December'
-            ];
-            document.getElementById('monthYear').textContent = 
-                `${monthNames[viewMonth]} ${viewYear}`;
-        }
+function toggleState(key, cell) {
+    const oldState = attendance[key] || 'none';
+    const nextIdx  = (STATES.indexOf(oldState) + 1) % STATES.length;
+    const newState = STATES[nextIdx];
 
-        function createCalendar() {
-            const calendarGrid = document.getElementById('calendarGrid');
-            calendarGrid.innerHTML = '';
+    cell.classList.remove('present','absent','holiday','od');
+    const icon = cell.querySelector('.status-icon');
+    if (icon) icon.remove();
 
-            // Add day headers
-            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            dayNames.forEach(day => {
-                const dayHeader = document.createElement('div');
-                dayHeader.className = 'day-header';
-                dayHeader.textContent = day;
-                calendarGrid.appendChild(dayHeader);
-            });
+    if (newState === 'none') {
+        delete attendance[key];
+    } else {
+        attendance[key] = newState;
+        cell.classList.add(newState);
+        const newIcon = document.createElement('span');
+        newIcon.className = 'status-icon';
+        newIcon.textContent = ICONS[newState];
+        cell.appendChild(newIcon);
+    }
+    setCookie(COOKIE, attendance);   // persist change
+    updateSummary();
+}
 
-            // Get month details
-            const daysInMonth = getDaysInMonth(viewYear, viewMonth);
-            const firstDay = getFirstDayOfMonth(viewYear, viewMonth);
+function updateSummary() {
+    const prefix = `${viewYear}-${viewMonth + 1}-`;
+    const counts = { present: 0, absent: 0, holiday: 0, od: 0 };
+    Object.keys(attendance).forEach(k => {
+        if (k.startsWith(prefix)) counts[attendance[k]]++;
+    });
 
-            // Add empty cells for days before the first day of the month
-            for (let i = 0; i < firstDay; i++) {
-                const emptyCell = document.createElement('div');
-                emptyCell.className = 'date-cell empty';
-                calendarGrid.appendChild(emptyCell);
-            }
+    $('presentCount').textContent  = counts.present;
+    $('absentCount').textContent   = counts.absent;
+    $('holidayCount').textContent  = counts.holiday;
+    $('odCount').textContent       = counts.od;
+}
 
-            // Add date cells
-            for (let day = 1; day <= daysInMonth; day++) {
-                const dateCell = document.createElement('div');
-                dateCell.className = 'date-cell';
-                dateCell.textContent = day;
+function changeMonth(delta) {
+    viewMonth += delta;
+    if (viewMonth < 0)  { viewMonth = 11; viewYear--; }
+    if (viewMonth > 11) { viewMonth = 0;  viewYear++; }
+    renderHeader();
+    createCalendar();
+}
 
-                const dateKey = `${viewYear}-${viewMonth + 1}-${day}`;
-                const currentState = attendanceData[dateKey] || 'none';
+function previousMonth() { changeMonth(-1); }
+function nextMonth()     { changeMonth( 1); }
 
-                if (currentState !== 'none') {
-                    dateCell.classList.add(currentState);
-                    const icon = document.createElement('span');
-                    icon.className = 'status-icon';
-                    icon.textContent = STATE_ICONS[currentState];
-                    dateCell.appendChild(icon);
-                }
-
-                // Add click event listener
-                dateCell.addEventListener('click', function() {
-                    toggleDateStatus(dateKey, dateCell);
-                });
-
-                calendarGrid.appendChild(dateCell);
-            }
-
-            // Update summary
-            updateSummary();
-        }
-
-        function toggleDateStatus(dateKey, cell) {
-            const currentState = attendanceData[dateKey] || 'none';
-            const currentIndex = STATES.indexOf(currentState);
-            const nextIndex = (currentIndex + 1) % STATES.length;
-            const nextState = STATES[nextIndex];
-
-            // Remove all state classes
-            cell.classList.remove('present', 'absent', 'holiday', 'od');
-
-            // Remove existing icon
-            const existingIcon = cell.querySelector('.status-icon');
-            if (existingIcon) {
-                existingIcon.remove();
-            }
-
-            // Update state
-            if (nextState === 'none') {
-                delete attendanceData[dateKey];
-            } else {
-                attendanceData[dateKey] = nextState;
-                cell.classList.add(nextState);
-                const icon = document.createElement('span');
-                icon.className = 'status-icon';
-                icon.textContent = STATE_ICONS[nextState];
-                cell.appendChild(icon);
-            }
-
-            // Update summary
-            updateSummary();
-        }
-
-        function updateSummary() {
-            let presentCount = 0;
-            let absentCount = 0;
-            let holidayCount = 0;
-            let odCount = 0;
-
-            // Count states for current month
-            const monthPrefix = `${viewYear}-${viewMonth + 1}-`;
-            for (const dateKey in attendanceData) {
-                if (dateKey.startsWith(monthPrefix)) {
-                    switch (attendanceData[dateKey]) {
-                        case 'present':
-                            presentCount++;
-                            break;
-                        case 'absent':
-                            absentCount++;
-                            break;
-                        case 'holiday':
-                            holidayCount++;
-                            break;
-                        case 'od':
-                            odCount++;
-                            break;
-                    }
-                }
-            }
-
-            // Update display
-            document.getElementById('presentCount').textContent = presentCount;
-            document.getElementById('absentCount').textContent = absentCount;
-            document.getElementById('holidayCount').textContent = holidayCount;
-            document.getElementById('odCount').textContent = odCount;
-        }
-
-        function previousMonth() {
-            viewMonth--;
-            if (viewMonth < 0) {
-                viewMonth = 11;
-                viewYear--;
-            }
-            updateMonthYear();
-            createCalendar();
-        }
-
-        function nextMonth() {
-            viewMonth++;
-            if (viewMonth > 11) {
-                viewMonth = 0;
-                viewYear++;
-            }
-            updateMonthYear();
-            createCalendar();
-        }
-
-        // Initialize calendar
-        function initCalendar() {
-            updateMonthYear();
-            createCalendar();
-        }
-
-        // Start the calendar
-        initCalendar();
-    </script>
+/* ----------  INITIALISE  ---------- */
+renderHeader();
+createCalendar();
+</script>
 </body>
 </html>
